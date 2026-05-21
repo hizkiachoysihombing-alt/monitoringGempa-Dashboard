@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Dashboard monitoring gempa bumi Indonesia real-time">
+    <title>🌋 Dashboard Gempa Indonesia</title>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/css/style.css">
+    
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌋</text></svg>">
+</head>
+<body>
+    <!-- Animated Background -->
+    <div class="bg-animation">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header-glow"></div>
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <span class="logo-icon">🌋</span>
+                    <div class="logo-text">
+                        <h1>Dashboard Gempa Indonesia</h1>
+                        <p class="logo-subtitle">Monitoring Real-time • Data Kaggle & BMKG</p>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <div class="status-badge" id="connectionStatus">
+                        <span class="status-dot"></span>
+                        <span class="status-text">Connecting...</span>
+                    </div>
+                    <button class="btn btn-icon" id="refreshBtn" title="Refresh Data">
+                        <span class="icon">🔄</span>
+                    </button>
+                </div>
+            </div>
+            <div class="last-update" id="lastUpdate"></div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container">
+        
+        <!-- Stats Grid -->
+        <section class="stats-grid">
+            <div class="stat-card stat-card--primary">
+                <div class="stat-card__icon">📊</div>
+                <div class="stat-card__content">
+                    <span class="stat-card__value" id="statTotal">-</span>
+                    <span class="stat-card__label">Total Gempa</span>
+                </div>
+                <div class="stat-card__trend">
+                    <span class="trend-icon">📈</span>
+                    <span id="statTrend">-</span>
+                </div>
+            </div>
+            
+            <div class="stat-card stat-card--success">
+                <div class="stat-card__icon">📅</div>
+                <div class="stat-card__content">
+                    <span class="stat-card__value" id="statYear">-</span>
+                    <span class="stat-card__label">Tahun Data</span>
+                </div>
+            </div>
+            
+            <div class="stat-card stat-card--warning">
+                <div class="stat-card__icon">📈</div>
+                <div class="stat-card__content">
+                    <span class="stat-card__value" id="statMaxMag">-</span>
+                    <span class="stat-card__label">Magnitudo Max</span>
+                </div>
+            </div>
+            
+            <div class="stat-card stat-card--info">
+                <div class="stat-card__icon">🔄</div>
+                <div class="stat-card__content">
+                    <span class="stat-card__value" id="statThisYear">-</span>
+                    <span class="stat-card__label">Data 2024</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Latest Earthquake Card -->
+        <section class="card card--highlight card--animated" id="latestCard">
+            <div class="card__header">
+                <h2>
+                    <span class="card__icon">🔴</span>
+                    Gempa Terbaru
+                </h2>
+                <span class="badge badge--pulse" id="latestBadge">LIVE</span>
+            </div>
+            <div class="card__body">
+                <div id="latestContent" class="loading">
+                    <div class="skeleton">
+                        <div class="skeleton__line skeleton__line--lg"></div>
+                        <div class="skeleton__line"></div>
+                        <div class="skeleton__line skeleton__line--sm"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Import Section (Collapsible) -->
+        <section class="card card--collapsible" id="importSection">
+            <div class="card__header card__header--clickable" onclick="toggleImportSection()">
+                <h2>
+                    <span class="card__icon">📥</span>
+                    Import Dataset
+                </h2>
+                <span class="card__toggle">▼</span>
+            </div>
+            <div class="card__body card__body--collapsible" id="importBody">
+                <div class="import-controls">
+                    <div class="input-group">
+                        <input type="text" id="datasetPath" placeholder="Path folder dataset (opsional)" class="input input--lg">
+                        <button onclick="importDataset()" class="btn btn--primary btn--lg">
+                            <span class="btn__icon">📁</span>
+                            Import Dataset
+                        </button>
+                        <button onclick="importDataset(true)" class="btn btn--warning btn--lg">
+                            <span class="btn__icon">🔄</span>
+                            Force Import
+                        </button>
+                    </div>
+                    <p class="input-hint">💡 Kosongkan path untuk auto-detect file di folder <code>app/data/</code></p>
+                </div>
+                <div id="importResult" class="result-box result-box--hidden"></div>
+            </div>
+        </section>
+
+        <!-- Map Section -->
+        <section class="card card--full" id="mapCard">
+            <div class="card__header">
+                <h2>
+                    <span class="card__icon">🗺️</span>
+                    Peta Sebaran Gempa
+                </h2>
+                <div class="card__actions">
+                    <div class="btn-group">
+                        <button onclick="loadMap('database')" class="btn btn--sm btn--active" id="btnMapDb">🗄️ Database</button>
+                        <button onclick="loadMap('realtime')" class="btn btn--sm" id="btnMapRealtime">📡 Realtime</button>
+                    </div>
+                    <select id="mapYear" class="select select--sm" onchange="loadMap('database')">
+                        <option value="2024">2024</option>
+                        <option value="2023">2023</option>
+                        <option value="2022">2022</option>
+                    </select>
+                </div>
+            </div>
+            <div class="card__body">
+                <div id="map" class="map-container">
+                    <div class="map-loading">
+                        <div class="spinner"></div>
+                        <p>Memuat peta...</p>
+                    </div>
+                </div>
+                <div class="map-legend">
+                    <div class="legend-item">
+                        <span class="legend-dot legend-dot--high"></span>
+                        <span>M ≥ 7.0</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-dot legend-dot--medium"></span>
+                        <span>5.0 ≤ M < 7.0</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-dot legend-dot--low"></span>
+                        <span>M < 5.0</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Chart Section -->
+        <section class="card">
+            <div class="card__header">
+                <h2>
+                    <span class="card__icon">📊</span>
+                    Statistik Bulanan
+                </h2>
+                <div class="card__actions">
+                    <div class="filter-group">
+                        <label class="filter-label">
+                            <span>Tahun:</span>
+                            <select id="chartYear" class="select select--sm" onchange="loadChart()">
+                                <option value="2024">2024</option>
+                                <option value="2023">2023</option>
+                                <option value="2022">2022</option>
+                            </select>
+                        </label>
+                        <label class="filter-label">
+                            <span>Kategori:</span>
+                            <select id="chartCategory" class="select select--sm" onchange="loadChart()">
+                                <option value="semua">Semua</option>
+                                <option value="csv">Dataset Lokal</option>
+                                <option value="bmkg">BMKG</option>
+                            </select>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="card__body">
+                <div class="chart-container">
+                    <canvas id="monthlyChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Earthquake Table with ADVANCED FILTERS -->
+        <section class="card">
+            <div class="card__header">
+                <h2>
+                    <span class="card__icon">📋</span>
+                    Daftar Gempa
+                </h2>
+                
+                <!-- 🔍 ADVANCED FILTER CONTROLS -->
+                <div class="filter-controls" style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid var(--border)">
+                    
+                    <!-- Search Lokasi -->
+                    <div style="position:relative;min-width:200px;flex:1">
+                        <input type="text" id="filterLokasi" placeholder="🔍 Cari lokasi..." 
+                               class="input input--sm" style="width:100%;padding-left:2.2rem">
+                        <span style="position:absolute;left:0.6rem;top:50%;transform:translateY(-50%);opacity:0.5;font-size:0.875rem">🔍</span>
+                    </div>
+                    
+                    <!-- Filter Status Risiko -->
+                    <select id="filterStatus" class="select select--sm" style="min-width:150px">
+                        <option value="">🎯 Semua Status</option>
+                        <option value="BAHAYA">🔴 Bahaya Tinggi</option>
+                        <option value="WASPADA">🟡 Waspada</option>
+                        <option value="AMAN">🟢 Relatif Aman</option>
+                    </select>
+                    
+                    <!-- Filter Magnitudo -->
+                    <select id="filterMagnitude" class="select select--sm" style="min-width:160px">
+                        <option value="">💥 Semua Magnitudo</option>
+                        <option value="7">≥ 7.0 (Sangat Kuat)</option>
+                        <option value="5">≥ 5.0 (Kuat)</option>
+                        <option value="3">≥ 3.0 (Sedang)</option>
+                        <option value="0">&lt; 3.0 (Lemah)</option>
+                    </select>
+                    
+                    <!-- Filter Kedalaman -->
+                    <select id="filterDepth" class="select select--sm" style="min-width:150px">
+                        <option value="">📏 Semua Kedalaman</option>
+                        <option value="shallow">0-70 km (Dangkal)</option>
+                        <option value="medium">70-300 km (Menengah)</option>
+                        <option value="deep">&gt; 300 km (Dalam)</option>
+                    </select>
+                    
+                    <!-- Reset Button -->
+                    <button onclick="resetFilters()" class="btn btn--sm btn--ghost" title="Reset Semua Filter" style="white-space:nowrap">
+                        🔄 Reset
+                    </button>
+                    
+                    <!-- Counter Badge -->
+                    <span id="filterCounter" class="badge" style="margin-left:auto;background:rgba(148,163,184,0.15)">
+                        <strong id="filteredCount">0</strong> / <strong id="totalCount">0</strong> data
+                    </span>
+                </div>
+            </div>
+            
+            <div class="card__body">
+                <div class="table-container">
+                    <table class="table table--hover" id="gempaTable">
+                        <thead>
+                            <tr>
+                                <th onclick="sortTable('datetime')" style="cursor:pointer;user-select:none">
+                                    <span class="th-content">Waktu <span class="th-sort">↕</span></span>
+                                </th>
+                                <th>Lokasi</th>
+                                <th onclick="sortTable('magnitude')" style="cursor:pointer;user-select:none">
+                                    <span class="th-content">M <span class="th-sort">↕</span></span>
+                                </th>
+                                <th>Kedalaman</th>
+                                <th>Status</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="gempaTableBody">
+                            <tr>
+                                <td colspan="6" class="table-loading">
+                                    <div class="skeleton-table">
+                                        <div class="skeleton__line"></div>
+                                        <div class="skeleton__line"></div>
+                                        <div class="skeleton__line"></div>
+                                        <div class="skeleton__line"></div>
+                                        <div class="skeleton__line"></div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Pagination -->
+                <div class="pagination" id="pagination">
+                    <button onclick="prevPage()" class="btn btn--sm btn--ghost" id="btnPrev" disabled>
+                        <span class="icon">←</span> Prev
+                    </button>
+                    <div class="pagination-info">
+                        <span id="pageInfo">Halaman 1</span>
+                        <span class="pagination-separator">•</span>
+                        <span id="totalInfo">-</span>
+                    </div>
+                    <button onclick="nextPage()" class="btn btn--sm btn--ghost" id="btnNext">
+                        Next <span class="icon">→</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- AI Recommendations with Location Selector -->
+        <section class="card card--info" id="aiCard">
+            <div class="card__header">
+                <h2>
+                    <span class="card__icon">💡</span>
+                    AI Analysis & Rekomendasi
+                </h2>
+                <!-- ✅ Location Selector for AI Analysis -->
+                <div class="card__actions">
+                    <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+                        <label for="aiLocation" style="font-size:0.875rem;color:var(--text-secondary);white-space:nowrap">📍 Analisis Lokasi:</label>
+                        <select id="aiLocation" class="select select--sm" style="min-width:180px">
+                            <option value="">-- Semua Lokasi --</option>
+                            <option value="Sumatra">🏝️ Sumatra</option>
+                            <option value="Java">🏙️ Jawa</option>
+                            <option value="Bali">🏖️ Bali & Nusa Tenggara</option>
+                            <option value="Kalimantan">🌴 Kalimantan</option>
+                            <option value="Sulawesi">⛰️ Sulawesi</option>
+                            <option value="Maluku">🐚 Maluku</option>
+                            <option value="Papua">🏔️ Papua</option>
+                            <option value="coastal">🌊 Area Pesisir</option>
+                            <option value="mountain">⛰️ Area Pegunungan</option>
+                        </select>
+                        <button onclick="runAIAnalysis()" class="btn btn--sm btn--primary" title="Jalankan AI Analysis">
+                            🤖 Analisis
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="card__body">
+                <div id="aiRecommendations" class="ai-content">
+                    <div class="ai-placeholder">
+                        <div class="ai-icon">🤖</div>
+                        <p>Pilih lokasi dan klik "Analisis" untuk mendapatkan rekomendasi AI spesifik.</p>
+                        <p style="font-size:0.8rem;color:var(--text-muted);margin-top:0.5rem">
+                            💡 Atau biarkan kosong untuk analisis gempa terbaru secara otomatis.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <span class="footer-logo">🌋</span>
+                    <span>Dashboard Gempa Indonesia v2.0</span>
+                </div>
+                <div class="footer-links">
+                    <a href="https://bmkg.go.id" target="_blank" rel="noopener">BMKG Official</a>
+                    <a href="/docs" target="_blank">API Docs</a>
+                    <a href="#" onclick="showAbout()">Tentang</a>
+                </div>
+            </div>
+            <p class="footer-disclaimer">
+                ⚠️ Informasi untuk tujuan edukasi. Untuk situasi darurat, ikuti arahan resmi BMKG dan pemerintah setempat.
+            </p>
+            <p class="footer-time" id="serverTime"></p>
+        </div>
+    </footer>
+
+    <!-- Detail Modal -->
+    <dialog class="modal" id="detailModal">
+        <div class="modal__overlay" onclick="closeModal()"></div>
+        <div class="modal__content">
+            <button class="modal__close" onclick="closeModal()">×</button>
+            <div class="modal__header">
+                <h3 id="modalTitle">Detail Gempa</h3>
+                <span class="badge" id="modalBadge">-</span>
+            </div>
+            <div class="modal__body" id="modalBody">
+                <!-- Content loaded dynamically -->
+            </div>
+            <div class="modal__footer">
+                <button class="btn btn--primary" onclick="closeModal()">Tutup</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Toast Notification -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>
